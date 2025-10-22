@@ -34,6 +34,8 @@ jobs:
   test-changed:
     runs-on: ubuntu-latest
     needs: lint
+    outputs:
+      ran: ${{ steps.run-changed.outputs.ran}}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,8 +57,7 @@ jobs:
 
 
       - name: Show changed files
-        run: |
-          echo "Changed specs:" ${{ steps.changed.outputs.all_changed_files }}
+        run: echo "Changed specs:" ${{ steps.changed.outputs.all_changed_files }}
 
 
       - name: Run only changed specs (or skip)
