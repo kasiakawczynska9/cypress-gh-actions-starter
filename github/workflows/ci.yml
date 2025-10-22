@@ -1,0 +1,95 @@
+name: CI (lint, changed tests, report)
+
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+
+
+test-changed:
+  runs-on: ubuntu-latest
+  needs: lint
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # potrzebne do diff-a
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - run: npm ci
+
+
+    # wykryj zmienione specy Cypressa
+    - name: Get changed spec files
+      id: changed
+      uses: tj-actions/changed-files@v45
+      with:
+        files: |
+          cypress/e2e/**/*.cy.js
+
+
+    - name: Show changed files
+      run: |
+        echo "Changed specs:" ${{ steps.changed.outputs.all_changed_files }}
+
+
+    - name: Run only changed specs (or skip)
+      id: run-changed
+      run: |
+        if [ -z "${{ steps.changed.outputs.all_changed_files }}" ]; then
+          echo "No spec changes. Skipping tests.";
+          echo "ran=false" >> $GITHUB_OUTPUT;
+          exit 0;
+        fi
+        SPECS=$(echo "${{ steps.changed.outputs.all_changed_files }}" | tr ' ' ',')
+        echo "Running: $SPECS"
+        npx cypress run --spec "$SPECS"
+        echo "ran=true" >> $GITHUB_OUTPUT
+
+
+    - name: Merge & build HTML report
+      if: steps.run-changed.outputs.ran == 'true'
+      run: |
+        npm run report || true
+
+
+    - name: Upload Pages artifact (report/)
+      if: steps.run-changed.outputs.ran == 'true'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: report
+
+
+  deploy-pages:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: test-changed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,38 @@
+name: Nightly full regression
+
+
+on:
+  schedule:
+    - cron: '0 1 * * *' # codziennie 01:00 UTC
+  workflow_dispatch: # opcjonalnie: manualny start
+
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+
+jobs:
+  full-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run ALL specs
+        run: npx cypress run
+      - name: Build HTML report
+        run: npm run report || true
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: report
+  deploy-pages:
+    needs: full-regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/deploy-pages@v4
