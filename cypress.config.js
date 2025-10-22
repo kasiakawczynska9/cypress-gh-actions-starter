@@ -17,7 +17,7 @@ module.exports = defineConfig({
     setupNodeEvents(on, config) {
       require("cypress-mochawesome-reporter/plugin")(on);
       // cypress-grep integration
-      require("cypress-grep/src/plugin")(config);
+      require("@cypress/grep/src/plugin")(config);
       return config;
     },
   },

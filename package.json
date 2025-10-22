@@ -9,8 +9,8 @@
     "report": "mochawesome-merge cypress/reports/*.json > cypress/reports/report.json && marge cypress/reports/report.json -f index -o report"
   },
   "devDependencies": {
+    "@cypress/grep": "^5.0.0",
     "cypress": "^13.13.0",
-    "cypress-grep": "^4.0.3",
     "cypress-mochawesome-reporter": "^3.8.2",
     "eslint": "^9.13.0",
     "eslint-plugin-cypress": "^3.5.0",
