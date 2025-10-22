@@ -86,10 +86,10 @@ jobs:
           path: report
 
 
-    deploy-pages:
-      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      needs: test-changed
-      runs-on: ubuntu-latest
-      steps:
-        - name: Deploy to GitHub Pages
-          uses: actions/deploy-pages@v4
+  deploy-pages:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: test-changed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
