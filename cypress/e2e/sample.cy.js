@@ -16,3 +16,4 @@ describe("Example Cypress E2E", () => {
 // touch 2
 // touch 3
 // touch 5
+// touch 6
