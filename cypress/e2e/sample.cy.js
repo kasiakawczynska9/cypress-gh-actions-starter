@@ -23,3 +23,4 @@ describe("Example Cypress E2E", () => {
 // trigger deploy pages
 // trigger merge fix
 // trigger safe merge path
+// trigger mochawesome merge
