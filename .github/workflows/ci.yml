@@ -73,12 +73,43 @@ jobs:
           npx cypress run --spec "$SPECS"
           echo "ran=true" >> $GITHUB_OUTPUT
 
-
-      - name: Merge & build HTML report
+      - name: List mochawesome JSONs
         if: steps.run-changed.outputs.ran == 'true'
         run: |
-          npm run report || true
+          echo "Listing cypress/reports directory:"
+          ls -la cypress/reports || true
+          echo "Listing JSONs:"
+          ls -la cypress/reports/.jsons || true
 
+      - name: Build HTML report (marge)
+        if: steps.run-changed.outputs.ran == 'true'
+        run: |
+          npm run report
+          echo "Listing report/:"
+          ls -la report
+
+      - name: Ensure index.html exists (fallback)
+        if: steps.run-changed.outputs.ran == 'true'
+        run: |
+          if [ ! -f report/index.html ]; then
+            echo "No HTML report found, creating fallback index.html"
+            mkdir -p report
+            cat > report/index.html <<'HTML'
+            <!doctype html>
+            <html>
+              <head><meta charset="utf-8"><title>Cypress Report</title></head>
+              <body>
+                <h1>Cypress Report</h1>
+                <p>No Mochawesome HTML was generated. Possible reasons:</p>
+                <ul>
+                  <li>Tests produced no Mochawesome JSONs</li>
+                  <li>Reporter not configured</li>
+                </ul>
+                <p>If this is unexpected, check the job logs for “mochawesome”.</p>
+              </body>
+            </html>
+            HTML
+          fi
 
       - name: Upload Pages artifact (report/)
         if: steps.run-changed.outputs.ran == 'true'
