@@ -22,3 +22,4 @@ describe("Example Cypress E2E", () => {
 // trigger deploy pages
 // trigger deploy pages
 // trigger merge fix
+// trigger safe merge path
