@@ -19,3 +19,4 @@ describe("Example Cypress E2E", () => {
 // touch 6
 // touch report build
 // touch pages env
+// trigger deploy pages
