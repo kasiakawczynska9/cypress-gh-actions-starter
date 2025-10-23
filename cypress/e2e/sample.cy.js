@@ -25,3 +25,4 @@ describe("Example Cypress E2E", () => {
 // trigger safe merge path
 // trigger mochawesome merge
 // trigger full pipeline
+// trigger formatting fix
