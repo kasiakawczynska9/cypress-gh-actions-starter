@@ -1,22 +1,11 @@
-name: CI (lint, changed tests, report)
-
+name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -28,26 +17,26 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run lint
-
+      - name: Run ESLint
+        run: npm run lint
 
   test-changed:
     runs-on: ubuntu-latest
     needs: lint
     outputs:
-      ran: ${{ steps.run-changed.outputs.ran}}
+      ran: ${{ steps.run-changed.outputs.ran }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # potrzebne do diff-a
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+
       - run: npm ci
 
-
-      # wykryj zmienione specy Cypressa
       - name: Get changed spec files
         id: changed
         uses: tj-actions/changed-files@v45
@@ -55,18 +44,13 @@ jobs:
           files: |
             cypress/e2e/**/*.cy.js
 
-
-      - name: Show changed files
-        run: echo "Changed specs:" ${{ steps.changed.outputs.all_changed_files }}
-
-
       - name: Run only changed specs (or skip)
         id: run-changed
         run: |
           if [ -z "${{ steps.changed.outputs.all_changed_files }}" ]; then
-            echo "No spec changes. Skipping tests.";
-            echo "ran=false" >> $GITHUB_OUTPUT;
-            exit 0;
+            echo "No spec changes. Skipping tests."
+            echo "ran=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
           SPECS=$(echo "${{ steps.changed.outputs.all_changed_files }}" | tr ' ' ',')
           echo "Running: $SPECS"
@@ -81,34 +65,35 @@ jobs:
           echo "Listing JSONs:"
           ls -la cypress/reports/.jsons || true
 
-      - name: Build HTML report (marge)
+      - name: Build HTML report (robust merge)
         if: steps.run-changed.outputs.ran == 'true'
         run: |
-          npm run report
-          echo "Listing report/:"
-          ls -la report
+          set -e
+          mkdir -p report
+          echo "Listing cypress/reports recursively:"
+          ls -la cypress/reports || true
+          find cypress/reports -type f -name "*.json" -print || true
 
-      - name: Ensure index.html exists (fallback)
-        if: steps.run-changed.outputs.ran == 'true'
-        run: |
-          if [ ! -f report/index.html ]; then
-            echo "No HTML report found, creating fallback index.html"
-            mkdir -p report
+          JSONS="$(ls cypress/reports/.jsons/*.json 2>/dev/null || true) $(ls cypress/reports/*.json 2>/dev/null || true)"
+          echo "Found JSONs: $JSONS"
+
+          if [ -z "$JSONS" ]; then
+            echo "No mochawesome JSONs found → creating fallback report/index.html"
             cat > report/index.html <<'HTML'
             <!doctype html>
             <html>
               <head><meta charset="utf-8"><title>Cypress Report</title></head>
               <body>
                 <h1>Cypress Report</h1>
-                <p>No Mochawesome HTML was generated. Possible reasons:</p>
-                <ul>
-                  <li>Tests produced no Mochawesome JSONs</li>
-                  <li>Reporter not configured</li>
-                </ul>
-                <p>If this is unexpected, check the job logs for “mochawesome”.</p>
+                <p>No mochawesome JSONs found. Check reporter config or test logs.</p>
               </body>
             </html>
             HTML
+          else
+            npx mochawesome-merge $JSONS > report/merged.json
+            npx marge report/merged.json -f index -o report
+            echo "Listing report/:"
+            ls -la report
           fi
 
       - name: Upload Pages artifact (report/)
@@ -117,9 +102,8 @@ jobs:
         with:
           path: report
 
-
   deploy-pages:
-    if: ${{ needs.test-changed.outputs.ran == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: test-changed
     runs-on: ubuntu-latest
     permissions:
