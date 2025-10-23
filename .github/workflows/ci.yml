@@ -49,52 +49,55 @@ jobs:
         run: |
           if [ -z "${{ steps.changed.outputs.all_changed_files }}" ]; then
             echo "No spec changes. Skipping tests."
-            echo "ran=false" >> $GITHUB_OUTPUT
+            echo "ran=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           SPECS=$(echo "${{ steps.changed.outputs.all_changed_files }}" | tr ' ' ',')
           echo "Running: $SPECS"
           npx cypress run --spec "$SPECS"
-          echo "ran=true" >> $GITHUB_OUTPUT
+          echo "ran=true" >> "$GITHUB_OUTPUT"
 
-      - name: List mochawesome JSONs
+      - name: List mochawesome outputs
         if: steps.run-changed.outputs.ran == 'true'
         run: |
-          echo "Listing cypress/reports directory:"
-          ls -la cypress/reports || true
-          echo "Listing JSONs:"
-          ls -la cypress/reports/.jsons || true
+          echo "Listing cypress/reports recursively:"
+          ls -Rla cypress/reports || true
 
-      - name: Build HTML report (robust merge)
+      - name: Build HTML report (robust)
         if: steps.run-changed.outputs.ran == 'true'
         run: |
           set -e
           mkdir -p report
-          echo "Listing cypress/reports recursively:"
-          ls -la cypress/reports || true
-          find cypress/reports -type f -name "*.json" -print || true
 
-          JSONS="$(ls cypress/reports/.jsons/*.json 2>/dev/null || true) $(ls cypress/reports/*.json 2>/dev/null || true)"
+          echo "1) If reporter produced HTML – copy it"
+          if [ -f "cypress/reports/test-results.html" ]; then
+            cp cypress/reports/test-results.html report/index.html
+            echo "Copied cypress/reports/test-results.html -> report/index.html"
+            ls -la report
+            exit 0
+          fi
+
+          echo "2) If JSONs exist – merge and build HTML"
+          JSONS="$(find cypress/reports -type f -name '*.json' -print | tr '\n' ' ' || true)"
           echo "Found JSONs: $JSONS"
-
-          if [ -z "$JSONS" ]; then
-            echo "No mochawesome JSONs found → creating fallback report/index.html"
-            cat > report/index.html <<'HTML'
-            <!doctype html>
-            <html>
-              <head><meta charset="utf-8"><title>Cypress Report</title></head>
-              <body>
-                <h1>Cypress Report</h1>
-                <p>No mochawesome JSONs found. Check reporter config or test logs.</p>
-              </body>
-            </html>
-            HTML
-          else
+          if [ -n "$JSONS" ]; then
             npx mochawesome-merge $JSONS > report/merged.json
             npx marge report/merged.json -f index -o report
-            echo "Listing report/:"
             ls -la report
+            exit 0
           fi
+
+          echo "3) No HTML and no JSONs – create fallback index.html"
+          printf '%s\n' \
+            '<!doctype html>' \
+            '<html>' \
+            '  <head><meta charset="utf-8"><title>Cypress Report</title></head>' \
+            '  <body>' \
+            '    <h1>Cypress Report</h1>' \
+            '    <p>Brak plików raportu (HTML/JSON). Sprawdź konfigurację reportera i logi testów.</p>' \
+            '  </body>' \
+            '</html>' > report/index.html
+          ls -la report
 
       - name: Upload Pages artifact (report/)
         if: steps.run-changed.outputs.ran == 'true'
@@ -103,6 +106,7 @@ jobs:
           path: report
 
   deploy-pages:
+    # publikuj tylko przy pushu na main
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: test-changed
     runs-on: ubuntu-latest
