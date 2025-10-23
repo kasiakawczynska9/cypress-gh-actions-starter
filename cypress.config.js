@@ -11,6 +11,8 @@ module.exports = defineConfig({
     reportPageTitle: "Cypress Report",
     embeddedScreenshots: true,
     inlineAssets: true,
+    html: false,
+    json: true
   },
   video: false,
   e2e: {
