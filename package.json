@@ -6,7 +6,8 @@
     "lint": "eslint \"cypress/**/*.js\"",
     "test": "cypress run",
     "test:smoke": "cypress run --env grepTags=smoke",
-    "report": "mkdir -p report && mochawesome-merge \"cypress/reports/**/*.json\" > report/merged.json && marge report/merged.json -f index -o report"
+    "report": "mkdir -p report && mochawesome-merge \"cypress/reports/.jsons/*.json\" > report/merged.json && marge report/merged.json -f index -o report"
+
   },
   "devDependencies": {
     "@cypress/grep": "^5.0.0",
