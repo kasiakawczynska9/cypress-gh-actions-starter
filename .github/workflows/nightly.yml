@@ -1,16 +1,20 @@
-name: Nightly Full Regression
+name: Nightly Regression
 
 on:
   schedule:
-    - cron: '0 1 * * *'   # codziennie 01:00 UTC
-  workflow_dispatch:       # pozwala uruchomić ręcznie z UI
+    - cron: '0 6 * * *'   # codziennie 06:00 UTC (~07:00 PL w zimie/08:00 w lecie)
+  workflow_dispatch:       # możliwość ręcznego odpalenia z UI
 
 jobs:
-  full-regression:
+  regression:
     runs-on: ubuntu-latest
-    concurrency:
-      group: nightly-${{ github.ref }}
-      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,66 +25,66 @@ jobs:
 
       - run: npm ci
 
-      # Uruchom wszystkie testy Cypress
-      - name: Run ALL Cypress specs
-        run: npx cypress run
-
-      # Pokaż co reporter wygenerował
-      - name: List mochawesome outputs
+      # Pełna regresja
+      - name: Run full Cypress regression
+        id: run-regression
+        continue-on-error: true
         run: |
-          echo "Listing cypress/reports recursively:"
-          ls -Rla cypress/reports || true
+          echo "Running full Cypress test suite..."
+          npx cypress run; CODE=$?
+          echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
+          exit 0
 
-      # Zbuduj HTML raport w sposób odporny (jak w CI)
-      - name: Build HTML report (robust)
+      # Zbuduj raport tak jak w CI (HTML -> merge JSON -> fallback)
+      - name: Build regression report (robust)
+        if: ${{ always() }}
         run: |
           set -e
           mkdir -p report
 
-          echo "1) If reporter produced HTML – copy it"
           if [ -f "cypress/reports/test-results.html" ]; then
             cp cypress/reports/test-results.html report/index.html
-            echo "Copied cypress/reports/test-results.html -> report/index.html"
-            ls -la report
           else
-            echo "2) If JSONs exist – merge and build HTML"
             JSONS="$(find cypress/reports -type f -name '*.json' -print | tr '\n' ' ' || true)"
-            echo "Found JSONs: $JSONS"
             if [ -n "$JSONS" ]; then
               npx mochawesome-merge $JSONS > report/merged.json
               npx marge report/merged.json -f index -o report
-              ls -la report
             else
-              echo "3) No HTML and no JSONs – create fallback index.html"
               printf '%s\n' \
-                '<!doctype html>' \
-                '<html>' \
-                '  <head><meta charset="utf-8"><title>Cypress Report</title></head>' \
-                '  <body>' \
-                '    <h1>Cypress Report</h1>' \
-                '    <p>Brak plików raportu (HTML/JSON). Sprawdź konfigurację reportera i logi testów.</p>' \
-                '  </body>' \
-                '</html>' > report/index.html
-              ls -la report
+                '<!doctype html><html><head><meta charset="utf-8"><title>Cypress Regression</title></head>' \
+                '<body><h1>Brak danych raportu (pełna regresja)</h1></body></html>' > report/index.html
             fi
           fi
 
-      # Spakuj raport dla Pages
+          # Przenieś pod /regression/ i dołóż root redirect -> /regression/
+          mkdir -p report/regression
+          mv report/index.html report/regression/index.html
+
+          printf '%s\n' \
+            '<!doctype html>' \
+            '<html><head><meta charset="utf-8">' \
+            '<meta http-equiv="refresh" content="0; url=./regression/">' \
+            '<title>Redirecting to /regression/</title></head>' \
+            '<body><p>Redirecting to <a href="./regression/">/regression/</a>…</p></body></html>' \
+            > report/index.html
+
+          echo "Report tree:"
+          find report -maxdepth 2 -type f -print
+
+      # Opublikuj artefakt (zawiera /index.html i /regression/index.html)
       - name: Upload Pages artifact (report/)
+        if: ${{ always() }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: report
 
-  deploy-pages:
-    needs: full-regression
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
+      # Deploy na GitHub Pages
+      - name: Deploy regression report to GitHub Pages
+        if: ${{ always() }}
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # Ustaw job na "failed" jeśli Cypress padł (po publikacji raportu)
+      - name: Mark job failed if Cypress failed
+        if: ${{ env.CYPRESS_EXIT != '0' }}
+        run: exit 1
