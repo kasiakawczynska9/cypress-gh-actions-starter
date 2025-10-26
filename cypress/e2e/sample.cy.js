@@ -33,4 +33,4 @@ describe('Example Cypress smoke tests', () => {
       .and('contain.text', 'Kitchen Sink');
   });
 });
-//changed
+//changed2

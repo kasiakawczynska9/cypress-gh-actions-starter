@@ -53,6 +53,8 @@ jobs:
             echo "No spec changes. Skipping tests."
             echo "ran=false" >> "$GITHUB_OUTPUT"
             echo "cypress_exit=0" >> "$GITHUB_OUTPUT"
+            echo "RAN=false" >> "$GITHUB_ENV"
+            echo "CYPRESS_EXIT=0" >> "$GITHUB_ENV"
             exit 0
           fi
           SPECS=$(echo "${{ steps.changed.outputs.all_changed_files }}" | tr ' ' ',')
@@ -60,13 +62,17 @@ jobs:
           npx cypress run --spec "$SPECS"; CODE=$?
           echo "cypress_exit=$CODE" >> "$GITHUB_OUTPUT"
           echo "ran=true" >> "$GITHUB_OUTPUT"
+          echo "RAN=true" >> "$GITHUB_ENV"
+          echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
           exit 0
 
-      - name: Build report (robust, regardless of test result)
+      - name: Build report (robust, always)
         if: ${{ always() }}
         run: |
           set -e
           mkdir -p report
+
+          echo "RAN env: ${RAN:-unset}, CYPRESS_EXIT: ${CYPRESS_EXIT:-unset}"
 
           echo "== Step A: prefer reporter HTML if present =="
           if [ -f "cypress/reports/test-results.html" ]; then
@@ -83,11 +89,10 @@ jobs:
               ls -la report
             else
               echo "No HTML/JSON from reporter. Creating fallback page…"
-              MSG="Brak danych raportu. "
-              if [ "${{ steps.run-changed.outputs.ran }}" = "false" ]; then
+              if [ "${RAN}" = "false" ]; then
                 MSG="Brak zmian w plikach testów – ten run nie uruchomił Cypressa."
               else
-                MSG="${MSG}Testy mogły zakończyć się przed wygenerowaniem artefaktów."
+                MSG="Testy były uruchomione, ale nie wygenerowano artefaktów raportu (sprawdź konfigurację reportera i logi)."
               fi
               printf '%s\n' \
                 '<!doctype html>' \
@@ -109,7 +114,7 @@ jobs:
           path: report
 
       - name: Mark job failed if Cypress failed
-        if: ${{ steps.run-changed.outputs.cypress_exit != '0' }}
+        if: ${{ env.CYPRESS_EXIT != '0' }}
         run: exit 1
 
   deploy-pages:
