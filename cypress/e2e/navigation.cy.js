@@ -18,4 +18,4 @@ describe('Kitchen Sink navigation', () => {
     cy.get('footer').should('be.visible');
   });
 });
-//changed
+//changed 2
