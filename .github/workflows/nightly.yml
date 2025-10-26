@@ -84,6 +84,20 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      # Podaj link do raportu
+      - name: Show deployed URL in logs & summary
+        if: ${{ always() }}
+        run: |
+          echo "Base Pages URL: ${{ steps.deployment.outputs.page_url }}"
+          echo "Regression URL: ${{ steps.deployment.outputs.page_url }}regression/"
+          {
+            echo "### Nightly Regression Report"
+            echo ""
+            echo "- Base: ${{ steps.deployment.outputs.page_url }}"
+            echo "- **Regression:** ${{ steps.deployment.outputs.page_url }}regression/"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
       # Ustaw job na "failed" jeśli Cypress padł (po publikacji raportu)
       - name: Mark job failed if Cypress failed
         if: ${{ env.CYPRESS_EXIT != '0' }}
