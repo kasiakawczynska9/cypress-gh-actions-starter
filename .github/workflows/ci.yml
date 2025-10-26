@@ -46,25 +46,29 @@ jobs:
 
       - name: Run only changed specs (or skip)
         id: run-changed
+        continue-on-error: true
         run: |
           if [ -z "${{ steps.changed.outputs.all_changed_files }}" ]; then
             echo "No spec changes. Skipping tests."
             echo "ran=false" >> "$GITHUB_OUTPUT"
+            echo "cypress_exit=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           SPECS=$(echo "${{ steps.changed.outputs.all_changed_files }}" | tr ' ' ',')
           echo "Running: $SPECS"
-          npx cypress run --spec "$SPECS"
+          npx cypress run --spec "$SPECS"; CODE=$?
+          echo "cypress_exit=$CODE" >> "$GITHUB_OUTPUT"
           echo "ran=true" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: List mochawesome outputs
-        if: steps.run-changed.outputs.ran == 'true'
+        if: ${{ always() && steps.run-changed.outputs.ran == 'true' }}
         run: |
           echo "Listing cypress/reports recursively:"
           ls -Rla cypress/reports || true
 
       - name: Build HTML report (robust)
-        if: steps.run-changed.outputs.ran == 'true'
+        if: ${{ always() && steps.run-changed.outputs.ran == 'true' }}
         run: |
           set -e
           mkdir -p report
@@ -100,14 +104,18 @@ jobs:
           ls -la report
 
       - name: Upload Pages artifact (report/)
-        if: steps.run-changed.outputs.ran == 'true'
+        if: ${{ always() && steps.run-changed.outputs.ran == 'true' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: report
 
+      # (opcjonalnie) Ustaw job jako "failed" jeśli Cypress zwrócił != 0
+      - name: Mark job failed if Cypress failed
+        if: ${{ steps.run-changed.outputs.ran == 'true' && steps.run-changed.outputs.cypress_exit != '0' }}
+        run: exit 1
+
   deploy-pages:
-    # publikuj tylko przy pushu na main
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: test-changed
     runs-on: ubuntu-latest
     permissions:
