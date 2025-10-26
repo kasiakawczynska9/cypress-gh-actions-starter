@@ -1,41 +1,108 @@
-name: Smoke (manual/API)
-
+name: On-Demand Smoke Tests
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:            # ręcznie z UI (Actions → Run workflow)
     inputs:
-      env:
-        description: 'Environment label (optional)'
+      extraGrep:
+        description: 'Optional: dodatkowy grep (np. @login)'
         required: false
-        default: 'default'
-
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
+        default: ''
+  repository_dispatch:          # przez API: event_type: run-smoke
+    types: [run-smoke]
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+
       - run: npm ci
-      - name: Run smoke tagged tests
-        run: npx cypress run --env grepTags=smoke
-      - name: Build HTML report
-        run: npm run report || true
-      - name: Upload Pages artifact
+
+      # Uruchom TYLKO smoke (tag @smoke) + ew. dodatkowy grep z UI
+      - name: Run Cypress smoke suite
+        id: run-smoke
+        continue-on-error: true
+        env:
+          # z UI: inputs.extraGrep; z repository_dispatch: client-payload.grep (opcjonalnie)
+          EXTRA_GREP_INPUT: ${{ inputs.extraGrep }}
+          EXTRA_GREP_API:   ${{ github.event.client_payload.grep }}
+        run: |
+          set -e
+          # Złóż grep: zawsze @smoke, plus ewentualne dodatkowe
+          EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
+          if [ -n "$EXTRA" ]; then
+            GREP="$EXTRA @smoke"
+          else
+            GREP="@smoke"
+          fi
+          echo "Using grep: $GREP"
+          # grepFilterSpecs=true ograniczy do plików zawierających dopasowania
+          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true"; CODE=$?
+          echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
+          exit 0
+
+      # Zbuduj raport jak w CI i umieść pod /smoke/
+      - name: Build smoke report (robust → /smoke/)
+        if: ${{ always() }}
+        run: |
+          set -e
+          mkdir -p report
+
+          if [ -f "cypress/reports/test-results.html" ]; then
+            cp cypress/reports/test-results.html report/index.html
+          else
+            JSONS="$(find cypress/reports -type f -name '*.json' -print | tr '\n' ' ' || true)"
+            if [ -n "$JSONS" ]; then
+              npx mochawesome-merge $JSONS > report/merged.json
+              npx marge report/merged.json -f index -o report
+            else
+              printf '%s\n' \
+                '<!doctype html><html><head><meta charset="utf-8"><title>Smoke Report</title></head>' \
+                '<body><h1>Brak danych raportu (smoke)</h1></body></html>' > report/index.html
+            fi
+          fi
+
+          mkdir -p report/smoke
+          mv report/index.html report/smoke/index.html
+
+          echo "Report tree (smoke):"
+          find report -maxdepth 2 -type f -print
+
+      - name: Upload Pages artifact (report/)
+        if: ${{ always() }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: report
-  deploy-pages:
-    needs: smoke
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/deploy-pages@v4
+
+      - name: Deploy smoke report to GitHub Pages
+        if: ${{ always() }}
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Show smoke URL
+        if: ${{ always() }}
+        run: |
+          echo "Smoke URL: ${{ steps.deployment.outputs.page_url }}smoke/"
+          {
+            echo "### Smoke Report"
+            echo "- **URL:** ${{ steps.deployment.outputs.page_url }}smoke/"
+            if [ -n "${{ inputs.extraGrep }}" ]; then
+              echo "- Extra grep: \`${{ inputs.extraGrep }}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mark job failed if Cypress failed
+        if: ${{ env.CYPRESS_EXIT != '0' }}
+        run: exit 1
