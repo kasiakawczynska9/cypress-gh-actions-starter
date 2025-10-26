@@ -1,4 +1,4 @@
-describe('Kitchen Sink navigation', () => {
+describe('Kitchen Sink navigation @smoke', () => {
   beforeEach(() => {
     cy.visit('https://example.cypress.io');
   });
