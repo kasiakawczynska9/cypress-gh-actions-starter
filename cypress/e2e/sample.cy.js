@@ -1,28 +1,37 @@
 // Simple test @smoke
 
-describe("Example Cypress E2E", () => {
-  it("basic navigation @smoke", () => {
+describe("Example Cypress smoke tests", () => {
+  beforeEach(() => {
     cy.visit("https://example.cypress.io");
-    cy.contains("type").click();
-    cy.url().should("include", "/commands/actions");
   });
 
-  it("additional non-smoke check", () => {
-    cy.visit("https://example.cypress.io");
-    cy.contains("contains").should("exist");
+  it("loads the homepage and checks the title", () => {
+    cy.title().should("include", "Cypress");
+  });
+
+  it("navigates to the Commands page", () => {
+    cy.contains("Commands").click();
+    cy.url().should("include", "/commands");
+  });
+
+  it("verifies that buttons are visible", () => {
+    cy.contains("Buttons").should("be.visible");
+  });
+
+  it("fails intentionally to test report output", () => {
+    cy.get("non-existent-selector", { timeout: 1000 }).should("exist");
+  });
+
+  it("skips this test for demonstration", () => {
+    cy.log("This test is skipped intentionally.");
+  }).skip();
+
+  it("logs custom info and assertions", () => {
+    cy.log("Custom info: verifying content presence");
+    cy.get("body").should("contain.text", "Kitchen Sink");
+  });
+
+  it("uses multiple assertions on the same element", () => {
+    cy.get("h1").should("be.visible").and("contain.text", "Kitchen Sink");
   });
 });
-// touch
-// touch 2
-// touch 3
-// touch 5
-// touch 6
-// touch report build
-// touch pages env
-// trigger deploy pages
-// trigger deploy pages
-// trigger merge fix
-// trigger safe merge path
-// trigger mochawesome merge
-// trigger full pipeline
-// trigger formatting fix
