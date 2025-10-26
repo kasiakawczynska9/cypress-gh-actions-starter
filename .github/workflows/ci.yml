@@ -25,6 +25,7 @@ jobs:
     needs: lint
     outputs:
       ran: ${{ steps.run-changed.outputs.ran }}
+      cypress_exit: ${{ steps.run-changed.outputs.cypress_exit }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,57 +62,54 @@ jobs:
           echo "ran=true" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: List mochawesome outputs
-        if: ${{ always() && steps.run-changed.outputs.ran == 'true' }}
-        run: |
-          echo "Listing cypress/reports recursively:"
-          ls -Rla cypress/reports || true
-
-      - name: Build HTML report (robust)
-        if: ${{ always() && steps.run-changed.outputs.ran == 'true' }}
+      - name: Build report (robust, regardless of test result)
+        if: ${{ always() }}
         run: |
           set -e
           mkdir -p report
 
-          echo "1) If reporter produced HTML – copy it"
+          echo "== Step A: prefer reporter HTML if present =="
           if [ -f "cypress/reports/test-results.html" ]; then
             cp cypress/reports/test-results.html report/index.html
             echo "Copied cypress/reports/test-results.html -> report/index.html"
             ls -la report
-            exit 0
+          else
+            echo "Reporter HTML not found. Searching for JSONs to merge…"
+            JSONS="$(find cypress/reports -type f -name '*.json' -print | tr '\n' ' ' || true)"
+            echo "Found JSONs: $JSONS"
+            if [ -n "$JSONS" ]; then
+              npx mochawesome-merge $JSONS > report/merged.json
+              npx marge report/merged.json -f index -o report
+              ls -la report
+            else
+              echo "No HTML/JSON from reporter. Creating fallback page…"
+              MSG="Brak danych raportu. "
+              if [ "${{ steps.run-changed.outputs.ran }}" = "false" ]; then
+                MSG="Brak zmian w plikach testów – ten run nie uruchomił Cypressa."
+              else
+                MSG="${MSG}Testy mogły zakończyć się przed wygenerowaniem artefaktów."
+              fi
+              printf '%s\n' \
+                '<!doctype html>' \
+                '<html>' \
+                '  <head><meta charset="utf-8"><title>Cypress Report</title></head>' \
+                '  <body>' \
+                '    <h1>Cypress Report</h1>' \
+                "    <p>${MSG}</p>" \
+                '  </body>' \
+                '</html>' > report/index.html
+              ls -la report
+            fi
           fi
-
-          echo "2) If JSONs exist – merge and build HTML"
-          JSONS="$(find cypress/reports -type f -name '*.json' -print | tr '\n' ' ' || true)"
-          echo "Found JSONs: $JSONS"
-          if [ -n "$JSONS" ]; then
-            npx mochawesome-merge $JSONS > report/merged.json
-            npx marge report/merged.json -f index -o report
-            ls -la report
-            exit 0
-          fi
-
-          echo "3) No HTML and no JSONs – create fallback index.html"
-          printf '%s\n' \
-            '<!doctype html>' \
-            '<html>' \
-            '  <head><meta charset="utf-8"><title>Cypress Report</title></head>' \
-            '  <body>' \
-            '    <h1>Cypress Report</h1>' \
-            '    <p>Brak plików raportu (HTML/JSON). Sprawdź konfigurację reportera i logi testów.</p>' \
-            '  </body>' \
-            '</html>' > report/index.html
-          ls -la report
 
       - name: Upload Pages artifact (report/)
-        if: ${{ always() && steps.run-changed.outputs.ran == 'true' }}
+        if: ${{ always() }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: report
 
-      # (opcjonalnie) Ustaw job jako "failed" jeśli Cypress zwrócił != 0
       - name: Mark job failed if Cypress failed
-        if: ${{ steps.run-changed.outputs.ran == 'true' && steps.run-changed.outputs.cypress_exit != '0' }}
+        if: ${{ steps.run-changed.outputs.cypress_exit != '0' }}
         run: exit 1
 
   deploy-pages:
