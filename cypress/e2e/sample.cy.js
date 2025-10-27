@@ -33,4 +33,4 @@ describe('Example Cypress tests', () => {
       .and('contain.text', 'Kitchen Sink');
   });
 });
-//changed23
+//changed234
