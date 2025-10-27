@@ -31,6 +31,10 @@ jobs:
       - run: npm ci
 
       # Uruchom TYLKO smoke (tag @smoke) + ew. dodatkowy grep z UI
+
+
+
+      # Zbuduj raport jak w CI i umieść pod /smoke/
       - name: Run Cypress smoke suite
         id: run-smoke
         continue-on-error: true
@@ -38,47 +42,20 @@ jobs:
           EXTRA_GREP_INPUT: ${{ inputs.extraGrep }}
           EXTRA_GREP_API:   ${{ github.event.client_payload.grep }}
         run: |
-          set -e
-          # Złóż wzorzec: bazowo "smoke" (bez @ przy grepTags=true), plus ewentualny dodatkowy
+          # Złóż wzorzec tagów dla cypress-grep (AND = '+', OR = ',')
           EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
           if [ -n "$EXTRA" ]; then
-            GREP="smoke ${EXTRA}"
+            GREP="smoke+${EXTRA}"   # zmień na "smoke,${EXTRA}" jeśli ma być OR
           else
             GREP="smoke"
           fi
           echo "Running by tag(s): $GREP"
-          # Wymuś wszystkie przełączniki + włącz debug grepa
-          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true,grepOmitFiltered=true,grepDebug=true"; CODE=$?
+
+          # NIE używamy `set -e`, żeby przechwycić kod wyjścia
+          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true,grepOmitFiltered=true,grepDebug=true"
+          CODE=$?
+
           echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
-          exit 0
-
-
-      # Zbuduj raport jak w CI i umieść pod /smoke/
-      - name: Build smoke report (robust → /smoke/)
-        if: ${{ always() }}
-        run: |
-          set -e
-          mkdir -p report
-
-          if [ -f "cypress/reports/test-results.html" ]; then
-            cp cypress/reports/test-results.html report/index.html
-          else
-            JSONS="$(find cypress/reports -type f -name '*.json' -print | tr '\n' ' ' || true)"
-            if [ -n "$JSONS" ]; then
-              npx mochawesome-merge $JSONS > report/merged.json
-              npx marge report/merged.json -f index -o report
-            else
-              printf '%s\n' \
-                '<!doctype html><html><head><meta charset="utf-8"><title>Smoke Report</title></head>' \
-                '<body><h1>Brak danych raportu (smoke)</h1></body></html>' > report/index.html
-            fi
-          fi
-
-          mkdir -p report/smoke
-          mv report/index.html report/smoke/index.html
-
-          echo "Report tree (smoke):"
-          find report -maxdepth 2 -type f -print
 
       - name: Upload Pages artifact (report/)
         if: ${{ always() }}
