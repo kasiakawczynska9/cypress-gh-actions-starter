@@ -39,15 +39,16 @@ jobs:
           EXTRA_GREP_API:   ${{ github.event.client_payload.grep }}
         run: |
           set -e
+          # Złóż wzorzec: bazowo "smoke" (bez @ przy grepTags=true), plus ewentualny dodatkowy
           EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
           if [ -n "$EXTRA" ]; then
-            GREP="@smoke ${EXTRA}"
+            GREP="smoke ${EXTRA}"
           else
-            GREP="@smoke"
+            GREP="smoke"
           fi
           echo "Running by tag(s): $GREP"
-          # v5: wymuś WSZYSTKIE przełączniki w CLI, żeby nie polegać na plikach konfiga
-          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true,grepOmitFiltered=true"; CODE=$?
+          # Wymuś wszystkie przełączniki + włącz debug grepa
+          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true,grepOmitFiltered=true,grepDebug=true"; CODE=$?
           echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
           exit 0
 
