@@ -43,19 +43,20 @@ jobs:
           EXTRA_GREP_API:   ${{ github.event.client_payload.grep }}
         run: |
           set +e
-          # Złóż wzorzec tagów dla @cypress/grep (AND = '+', OR = ',')
-          EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
+          # Złóż wzorzec tagów z @ (AND = '+', OR = ',')
+          RAW_EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
+          EXTRA="$(echo "$RAW_EXTRA" | xargs)"
+          BASE="@smoke"
           if [ -n "$EXTRA" ]; then
-            GREP="smoke+${EXTRA}"   # zmień na "smoke,${EXTRA}" jeśli ma być OR
+            case "$EXTRA" in @*) : ;; *) EXTRA="@$EXTRA" ;; esac
+            GREP="${BASE}+${EXTRA}"     # OR -> "${BASE},${EXTRA}"
           else
-            GREP="smoke"
+            GREP="${BASE}"
           fi
-          echo "Running by tag(s): $GREP"
+          echo "Running by tags: ${GREP}"
 
-          # uruchom tylko testy z tagiem smoke
           npx cypress run --env "grepTags=${GREP},grepFilterSpecs=true,grepOmitFiltered=true,grepDebug=true"
           CODE=$?
-
           set -e
           echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
           exit 0
