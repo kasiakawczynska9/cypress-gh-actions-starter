@@ -1,5 +1,5 @@
 const { defineConfig } = require("cypress");
-
+const { plugin: cypressGrepPlugin } = require("@cypress/grep");
 module.exports = defineConfig({
   reporter: "cypress-mochawesome-reporter",
   reporterOptions: {
