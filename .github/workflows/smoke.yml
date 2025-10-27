@@ -35,12 +35,10 @@ jobs:
         id: run-smoke
         continue-on-error: true
         env:
-          # z UI: inputs.extraGrep; z API (repository_dispatch): client-payload.grep (opcjonalnie)
           EXTRA_GREP_INPUT: ${{ inputs.extraGrep }}
           EXTRA_GREP_API:   ${{ github.event.client_payload.grep }}
         run: |
           set -e
-          # Złóż wzorzec: zawsze @smoke, plus ewentualny dodatkowy grep
           EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
           if [ -n "$EXTRA" ]; then
             GREP="@smoke ${EXTRA}"
@@ -48,10 +46,11 @@ jobs:
             GREP="@smoke"
           fi
           echo "Running by tag(s): $GREP"
-          # v5: import w support/e2e.js + grepFilterSpecs=true w cypress.config.js
-          npx cypress run --env "grep=${GREP},grepTags=true"; CODE=$?
+          # v5: wymuś WSZYSTKIE przełączniki w CLI, żeby nie polegać na plikach konfiga
+          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true,grepOmitFiltered=true"; CODE=$?
           echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
           exit 0
+
 
       # Zbuduj raport jak w CI i umieść pod /smoke/
       - name: Build smoke report (robust → /smoke/)
