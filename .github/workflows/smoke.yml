@@ -53,7 +53,7 @@ jobs:
           echo "Running by tag(s): $GREP"
 
           # uruchom tylko testy z tagiem smoke
-          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true,grepOmitFiltered=true,grepDebug=true"
+          npx cypress run --env "grepTags=${GREP},grepFilterSpecs=true,grepOmitFiltered=true,grepDebug=true"
           CODE=$?
 
           set -e
