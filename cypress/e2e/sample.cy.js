@@ -1,4 +1,4 @@
-describe('Example Cypress smoke tests', () => {
+describe('Example Cypress tests', () => {
   beforeEach(() => {
     cy.visit('https://example.cypress.io');
   });
