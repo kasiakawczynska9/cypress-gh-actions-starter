@@ -1,5 +1,4 @@
 const { defineConfig } = require("cypress");
-const grepPlugin = require('@cypress/grep/src/plugin');
 
 module.exports = defineConfig({
   reporter: "cypress-mochawesome-reporter",
@@ -12,15 +11,20 @@ module.exports = defineConfig({
     embeddedScreenshots: true,
     inlineAssets: true,
     html: false,
-    json: true
+    json: true,
   },
   video: false,
   e2e: {
     specPattern: "cypress/e2e/**/*.cy.js",
     setupNodeEvents(on, config) {
       require("cypress-mochawesome-reporter/plugin")(on);
-      grepPlugin(config);
       return config;
+    },
+    env: {
+      // v5: to włącza *filtrowanie całych speców* po grep/tagach
+      grepFilterSpecs: true,
+      // (opcjonalnie) nie pokazuj w raporcie testów odfiltrowanych
+      grepOmitFiltered: true,
     },
   },
 });

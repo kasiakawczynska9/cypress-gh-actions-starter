@@ -35,21 +35,21 @@ jobs:
         id: run-smoke
         continue-on-error: true
         env:
-          # z UI: inputs.extraGrep; z repository_dispatch: client-payload.grep (opcjonalnie)
+          # z UI: inputs.extraGrep; z API (repository_dispatch): client-payload.grep (opcjonalnie)
           EXTRA_GREP_INPUT: ${{ inputs.extraGrep }}
           EXTRA_GREP_API:   ${{ github.event.client_payload.grep }}
         run: |
           set -e
-          # Złóż grep: zawsze @smoke, plus ewentualne dodatkowe
+          # Złóż wzorzec: zawsze @smoke, plus ewentualny dodatkowy grep
           EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
           if [ -n "$EXTRA" ]; then
-            GREP="$EXTRA @smoke"
+            GREP="@smoke ${EXTRA}"
           else
             GREP="@smoke"
           fi
-          echo "Using grep: $GREP"
-          # grepFilterSpecs=true ograniczy do plików zawierających dopasowania
-          npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true"; CODE=$?
+          echo "Running by tag(s): $GREP"
+          # v5: import w support/e2e.js + grepFilterSpecs=true w cypress.config.js
+          npx cypress run --env "grep=${GREP},grepTags=true"; CODE=$?
           echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
           exit 0
 
