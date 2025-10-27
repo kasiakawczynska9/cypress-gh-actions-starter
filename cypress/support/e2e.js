@@ -1,3 +1,3 @@
 import "cypress-mochawesome-reporter/register";
-import { register as registerCypressGrep } from '@cypress/grep'
+const { register: registerCypressGrep } = require('@cypress/grep')
 registerCypressGrep()
