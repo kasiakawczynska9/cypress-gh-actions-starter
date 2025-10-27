@@ -18,12 +18,11 @@ module.exports = defineConfig({
     specPattern: "cypress/e2e/**/*.cy.js",
     setupNodeEvents(on, config) {
       require("cypress-mochawesome-reporter/plugin")(on);
+      require("@cypress/grep/src/plugin")(config);
       return config;
     },
     env: {
-      // v5: to włącza *filtrowanie całych speców* po grep/tagach
       grepFilterSpecs: true,
-      // (opcjonalnie) nie pokazuj w raporcie testów odfiltrowanych
       grepOmitFiltered: true,
     },
   },
