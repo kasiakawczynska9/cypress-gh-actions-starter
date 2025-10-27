@@ -42,7 +42,8 @@ jobs:
           EXTRA_GREP_INPUT: ${{ inputs.extraGrep }}
           EXTRA_GREP_API:   ${{ github.event.client_payload.grep }}
         run: |
-          # Złóż wzorzec tagów dla cypress-grep (AND = '+', OR = ',')
+          set +e
+          # Złóż wzorzec tagów dla @cypress/grep (AND = '+', OR = ',')
           EXTRA="${EXTRA_GREP_INPUT:-${EXTRA_GREP_API:-}}"
           if [ -n "$EXTRA" ]; then
             GREP="smoke+${EXTRA}"   # zmień na "smoke,${EXTRA}" jeśli ma być OR
@@ -51,11 +52,13 @@ jobs:
           fi
           echo "Running by tag(s): $GREP"
 
-          # NIE używamy `set -e`, żeby przechwycić kod wyjścia
+          # uruchom tylko testy z tagiem smoke
           npx cypress run --env "grep=${GREP},grepTags=true,grepFilterSpecs=true,grepOmitFiltered=true,grepDebug=true"
           CODE=$?
 
+          set -e
           echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
+          exit 0
 
       - name: Upload Pages artifact (report/)
         if: ${{ always() }}
