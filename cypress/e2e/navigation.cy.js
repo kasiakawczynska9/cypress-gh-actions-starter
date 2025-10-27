@@ -1,4 +1,4 @@
-describe("Kitchen Sink navigation", { tags: ["smoke"] }, () => {
+describe("Kitchen Sink navigation", { tags: ["@smoke"] }, () => {
   beforeEach(() => {
     cy.visit("https://example.cypress.io");
   });
