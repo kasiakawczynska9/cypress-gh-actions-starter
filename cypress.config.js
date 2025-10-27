@@ -3,15 +3,15 @@ const { plugin: cypressGrepPlugin } = require("@cypress/grep");
 module.exports = defineConfig({
   reporter: "cypress-mochawesome-reporter",
   reporterOptions: {
-    reportDir: "cypress/reports",
+    reportDir: "cypress/reports/mochawesome",
     reportFilename: "test-results",
     overwrite: false,
     charts: true,
     reportPageTitle: "Cypress Report",
     embeddedScreenshots: true,
     inlineAssets: true,
-    html: false,
-    json: true,
+    saveAllAttempts: false,
+    saveJson: true,
   },
   video: false,
   e2e: {

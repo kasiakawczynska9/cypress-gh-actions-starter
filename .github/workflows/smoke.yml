@@ -1,13 +1,13 @@
 name: On-Demand Smoke Tests
 
 on:
-  workflow_dispatch:            # ręcznie z UI (Actions → Run workflow)
+  workflow_dispatch:
     inputs:
       extraGrep:
         description: 'Optional: dodatkowy grep (np. @login)'
         required: false
         default: ''
-  repository_dispatch:          # przez API: event_type: run-smoke
+  repository_dispatch:
     types: [run-smoke]
 
 jobs:
@@ -28,13 +28,16 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Clean previous reports
+        run: rm -rf cypress/reports
+
       - run: npm ci
 
-      # Uruchom TYLKO smoke (tag @smoke) + ew. dodatkowy grep z UI
+      - name: Ensure report CLIs available
+        run: |
+          npx --yes mochawesome-merge --version
+          npx --yes mochawesome-report-generator --version
 
-
-
-      # Zbuduj raport jak w CI i umieść pod /smoke/
       - name: Run Cypress smoke suite
         id: run-smoke
         continue-on-error: true
@@ -49,7 +52,7 @@ jobs:
           BASE="@smoke"
           if [ -n "$EXTRA" ]; then
             case "$EXTRA" in @*) : ;; *) EXTRA="@$EXTRA" ;; esac
-            GREP="${BASE}+${EXTRA}"     # OR -> "${BASE},${EXTRA}"
+            GREP="${BASE}+${EXTRA}"     # (OR => "${BASE},${EXTRA}")
           else
             GREP="${BASE}"
           fi
@@ -59,21 +62,57 @@ jobs:
           CODE=$?
           set -e
           echo "CYPRESS_EXIT=$CODE" >> "$GITHUB_ENV"
+          # nie failuj tutaj – zrobimy to na końcu
           exit 0
 
-      - name: Upload Pages artifact (report/)
+      - name: Locate mochawesome JSON
         if: ${{ always() }}
+        id: mochawesome
+        run: |
+          shopt -s nullglob
+          FILES=(cypress/reports/mochawesome/*.json)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "has_reports=false" >> "$GITHUB_OUTPUT"
+            echo "Found mochawesome JSON files: 0"
+          else
+            echo "Found mochawesome JSON files: ${#FILES[@]}"
+            printf '%s\n' "${FILES[@]}"
+            echo "has_reports=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build smoke HTML report
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
+        run: |
+          set -eo pipefail
+          REPORT_ROOT="cypress/reports"
+          OUTPUT_DIR="${REPORT_ROOT}/smoke"
+
+          mkdir -p "${OUTPUT_DIR}"
+          npx mochawesome-merge "${REPORT_ROOT}/mochawesome"/*.json > "${REPORT_ROOT}/mochawesome.json"
+          npx mochawesome-report-generator "${REPORT_ROOT}/mochawesome.json" \
+            -o "${OUTPUT_DIR}" \
+            -f "index" \
+            --inline \
+            --overwrite
+          cp -f "${OUTPUT_DIR}/index.html" "${REPORT_ROOT}/index.html"
+
+      - name: Configure GitHub Pages
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact (cypress/reports)
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: cypress/reports
 
       - name: Deploy smoke report to GitHub Pages
-        if: ${{ always() }}
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
         id: deployment
         uses: actions/deploy-pages@v4
 
       - name: Show smoke URL
-        if: ${{ always() }}
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
         run: |
           echo "Smoke URL: ${{ steps.deployment.outputs.page_url }}smoke/"
           {

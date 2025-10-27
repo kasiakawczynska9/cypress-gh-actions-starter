@@ -23,7 +23,15 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Clean previous reports
+        run: rm -rf cypress/reports
+
       - run: npm ci
+
+      - name: Ensure report CLIs available
+        run: |
+          npx --yes mochawesome-merge --version
+          npx --yes mochawesome-report-generator --version
 
       # Pełna regresja
       - name: Run full Cypress regression
@@ -36,57 +44,57 @@ jobs:
           exit 0
 
       # Zbuduj raport tak jak w CI (HTML -> merge JSON -> fallback)
-      - name: Build regression report (robust)
+      - name: Locate mochawesome JSON
         if: ${{ always() }}
+        id: mochawesome
         run: |
-          set -e
-          mkdir -p report
-
-          if [ -f "cypress/reports/test-results.html" ]; then
-            cp cypress/reports/test-results.html report/index.html
+          shopt -s nullglob
+          FILES=(cypress/reports/mochawesome/*.json)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "has_reports=false" >> "$GITHUB_OUTPUT"
+            echo "Found mochawesome JSON files: 0"
           else
-            JSONS="$(find cypress/reports -type f -name '*.json' -print | tr '\n' ' ' || true)"
-            if [ -n "$JSONS" ]; then
-              npx mochawesome-merge $JSONS > report/merged.json
-              npx marge report/merged.json -f index -o report
-            else
-              printf '%s\n' \
-                '<!doctype html><html><head><meta charset="utf-8"><title>Cypress Regression</title></head>' \
-                '<body><h1>Brak danych raportu (pełna regresja)</h1></body></html>' > report/index.html
-            fi
+            echo "Found mochawesome JSON files: ${#FILES[@]}"
+            printf '%s\n' "${FILES[@]}"
+            echo "has_reports=true" >> "$GITHUB_OUTPUT"
           fi
 
-          # Przenieś pod /regression/ i dołóż root redirect -> /regression/
-          mkdir -p report/regression
-          mv report/index.html report/regression/index.html
+      - name: Build regression HTML report
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
+        run: |
+          set -eo pipefail
+          REPORT_ROOT="cypress/reports"
+          OUTPUT_DIR="${REPORT_ROOT}/regression"
 
-          printf '%s\n' \
-            '<!doctype html>' \
-            '<html><head><meta charset="utf-8">' \
-            '<meta http-equiv="refresh" content="0; url=./regression/">' \
-            '<title>Redirecting to /regression/</title></head>' \
-            '<body><p>Redirecting to <a href="./regression/">/regression/</a>…</p></body></html>' \
-            > report/index.html
+          mkdir -p "${OUTPUT_DIR}"
+          npx mochawesome-merge "${REPORT_ROOT}/mochawesome"/*.json > "${REPORT_ROOT}/mochawesome.json"
+          npx mochawesome-report-generator "${REPORT_ROOT}/mochawesome.json" \
+            -o "${OUTPUT_DIR}" \
+            -f "index" \
+            --inline \
+            --overwrite
+          cp -f "${OUTPUT_DIR}/index.html" "${REPORT_ROOT}/index.html"
 
-          echo "Report tree:"
-          find report -maxdepth 2 -type f -print
+      # Opublikuj artefakt (cypress/reports z redirectem)
+      - name: Configure GitHub Pages
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
+        uses: actions/configure-pages@v5
 
-      # Opublikuj artefakt (zawiera /index.html i /regression/index.html)
-      - name: Upload Pages artifact (report/)
-        if: ${{ always() }}
+      - name: Upload Pages artifact (cypress/reports)
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
         uses: actions/upload-pages-artifact@v3
         with:
-          path: report
+          path: cypress/reports
 
       # Deploy na GitHub Pages
       - name: Deploy regression report to GitHub Pages
-        if: ${{ always() }}
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
         id: deployment
         uses: actions/deploy-pages@v4
 
       # Podaj link do raportu
       - name: Show deployed URL in logs & summary
-        if: ${{ always() }}
+        if: ${{ steps.mochawesome.outputs.has_reports == 'true' }}
         run: |
           echo "Base Pages URL: ${{ steps.deployment.outputs.page_url }}"
           echo "Regression URL: ${{ steps.deployment.outputs.page_url }}regression/"
